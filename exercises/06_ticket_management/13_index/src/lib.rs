@@ -1,5 +1,7 @@
 // TODO: Implement `Index<&TicketId>` and `Index<TicketId>` for `TicketStore`.
 
+use std::ops::Index;
+
 use ticket_fields::{TicketDescription, TicketTitle};
 
 #[derive(Clone)]
@@ -58,6 +60,23 @@ impl TicketStore {
     }
 }
 
+
+impl Index<TicketId> for TicketStore {
+    type Output = Ticket;
+    
+    fn index(&self, index: TicketId) -> &Self::Output {
+        self.get(index).unwrap()
+    }
+}
+
+impl Index<&TicketId> for TicketStore {
+    type Output = Ticket;
+
+    fn index(&self, index: &TicketId) -> &Self::Output {
+        &self[*index]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{Status, TicketDraft, TicketStore};
@@ -73,6 +92,7 @@ mod tests {
         };
         let id1 = store.add_ticket(draft1.clone());
         let ticket1 = &store[id1];
+        let ticket2 = &store[id1];
         assert_eq!(draft1.title, ticket1.title);
         assert_eq!(draft1.description, ticket1.description);
         assert_eq!(ticket1.status, Status::ToDo);
