@@ -32,7 +32,19 @@ impl TicketStore {
         self.tickets.push(ticket);
     }
 
-    
+    pub fn in_progress(&self) -> impl Iterator<Item = &Ticket> {
+        self.tickets.iter().filter(|t| t.status == Status::InProgress)
+    }
+
+    pub fn print_in_progress_iter_type(&self) {
+        let iter = self
+            .tickets
+            .iter()
+            .filter(|t| t.status == Status::InProgress);
+
+        println!("Type of iter: {}", std::any::type_name_of_val(&iter));
+    }
+
 }
 
 #[cfg(test)]
@@ -61,5 +73,18 @@ mod tests {
         let in_progress_tickets: Vec<&Ticket> = store.in_progress().collect();
         assert_eq!(in_progress_tickets.len(), 1);
         assert_eq!(in_progress_tickets[0], &in_progress);
+    }
+
+    #[test]
+    fn print_iter_type() {
+        let mut store = TicketStore::new();
+
+        store.add_ticket(Ticket {
+            title: ticket_title(),
+            description: ticket_description(),
+            status: Status::InProgress,
+        });
+
+        store.print_in_progress_iter_type();
     }
 }
