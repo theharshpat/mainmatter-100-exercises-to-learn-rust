@@ -7,23 +7,43 @@ pub mod store;
 
 #[derive(Clone)]
 // TODO: flesh out the client implementation.
-pub struct TicketStoreClient {}
+pub struct TicketStoreClient {
+    sender: Sender<Command>,  // me: to send a new msg request to server. response back channel provided in command args.
+}
 
 impl TicketStoreClient {
     // Feel free to panic on all errors, for simplicity.
     pub fn insert(&self, draft: TicketDraft) -> TicketId {
-        todo!()
+        let (res_sender, res_receiver) = std::sync::mpsc::channel();
+
+        let _ = self.sender.send(Command::Insert { 
+            draft, 
+            response_channel: res_sender 
+        });
+
+        res_receiver.recv().unwrap()
     }
 
     pub fn get(&self, id: TicketId) -> Option<Ticket> {
-        todo!()
+        let (res_sender, res_receiver) = std::sync::mpsc::channel();
+
+        let _ = self.sender.send(Command::Get { id, response_channel: res_sender });
+
+        res_receiver.recv().unwrap()
     }
 }
+
+// me: this is the only useful entry point that client should care about now.
+// me: it returns client its own struct with its methods to interact with server
+// me: TicketStoreClient impl methods -> already running server created by fn server (as only that gets arg of channel reveiver upon creation of launch)
+// me: server needs to respond via res channel as otherwise server is not directly reachable
+// me: server's response_channel should respond to -> TicketStoreClient impl methods, which should send msg by sender channel object. along with that it must provide arg to get the response back.
+// me: so TicketStoreClient impl methods respond to -> tests method calls on TicketStoreClient
 
 pub fn launch() -> TicketStoreClient {
     let (sender, receiver) = std::sync::mpsc::channel();
     std::thread::spawn(move || server(receiver));
-    todo!()
+    TicketStoreClient { sender }
 }
 
 // No longer public! This becomes an internal detail of the library now.
