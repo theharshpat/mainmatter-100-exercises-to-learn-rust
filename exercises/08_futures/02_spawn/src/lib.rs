@@ -1,12 +1,65 @@
-use tokio::net::TcpListener;
+use std::panic;
+
+use tokio::{net::TcpListener, task::JoinSet};
 
 // TODO: write an echo server that accepts TCP connections on two listeners, concurrently.
 //  Multiple connections (on the same listeners) should be processed concurrently.
 //  The received data should be echoed back to the client.
 pub async fn echoes(first: TcpListener, second: TcpListener) -> Result<(), anyhow::Error> {
-    todo!()
-}
+    // top-level orchestration:
+    // we want 2 independent listener loops running concurrently
 
+    let handle1 = tokio::spawn(async move {
+        // listener task 1
+
+        // infinite listener loop:
+        // keep accepting new clients forever
+        loop {
+            // wait for next client on first listener
+            let (mut stream, _) = first.accept().await.unwrap();
+
+            // accepting connections is one layer of waiting.
+            // each individual client connection should ALSO run concurrently,
+            // otherwise one slow client would block future accepts.
+            //
+            // so we spawn a separate task per client connection.
+            tokio::spawn(async move {
+                let (mut reader, mut writer) = stream.split();
+
+                // continuously copy bytes from client back to client
+                // until the client closes the connection
+                tokio::io::copy(&mut reader, &mut writer)
+                    .await
+                    .unwrap();
+            });
+        }
+    });
+
+    let handle2 = tokio::spawn(async move {
+        // listener task 2
+
+        // same logic as first listener, but for the second socket
+        loop {
+            let (mut stream, _) = second.accept().await.unwrap();
+
+            tokio::spawn(async move {
+                let (mut reader, mut writer) = stream.split();
+
+                tokio::io::copy(&mut reader, &mut writer)
+                    .await
+                    .unwrap();
+            });
+        }
+    });
+
+    // wait for both listener tasks concurrently.
+    //
+    // in practice these never finish because both listener loops are infinite,
+    // so this keeps the server alive forever.
+    tokio::try_join!(handle1, handle2)?;
+
+    Ok(())
+}
 #[cfg(test)]
 mod tests {
     use super::*;
