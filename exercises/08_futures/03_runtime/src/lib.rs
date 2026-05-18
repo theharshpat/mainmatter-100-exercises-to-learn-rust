@@ -2,6 +2,7 @@
 //  accept connections on both of them concurrently, and always reply to clients by sending
 //  the `Display` representation of the `reply` argument as a response.
 use std::fmt::Display;
+use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 
@@ -10,7 +11,48 @@ where
     // `T` cannot be cloned. How do you share it between the two server tasks?
     T: Display + Send + Sync + 'static,
 {
-    todo!()
+    // T itself is not cloneable
+    // We need to share it across
+    // - listener task 1
+    // - listener task 2
+    // - every client connection task
+    // Arc gives shared ownership without cloning underlying T
+    // Arc clones only clones the shared ownership pointer, not the underlying T
+
+    let reply = Arc::new(reply); // can be owned by listener task 1
+    let reply_another = reply.clone(); // can be owned by listener task 2
+
+    // listener task 1
+    let handle1 = tokio::spawn(async move {
+        loop {
+            let (mut stream, _) = first.accept().await.unwrap();
+
+            // we cannot move 'reply' into the client task. We need to clone it.
+            // If not, we will lose the ownership of arc pointer to be used by subsequent client tasks
+            let reply_client_clone = reply.clone();
+            tokio::spawn(async move {
+                let (_, mut writer) = stream.split();
+                let response = reply_client_clone.to_string();
+                writer.write_all(response.as_bytes()).await.unwrap();
+            });
+        }
+    });
+
+    // listener task 2
+    let handle2 = tokio::spawn(async move {
+        loop {
+            let (mut stream, _) = second.accept().await.unwrap();
+
+            let reply_another_client_clone = reply_another.clone();
+            tokio::spawn(async move {
+                let (_, mut writer) = stream.split();
+                let response = reply_another_client_clone.to_string();
+                writer.write_all(response.as_bytes()).await.unwrap();
+            });
+        }
+    });
+
+    let _ = tokio::join!(handle1, handle2);
 }
 
 #[cfg(test)]
